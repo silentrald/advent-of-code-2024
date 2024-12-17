@@ -179,15 +179,16 @@ const char *get_opcode_name(int64_t opcode) noexcept {
 }
 
 void step_info(int64_t ip, const Registers &registers,
-               const std::vector<int64_t> &instructions) noexcept {
+               const std::vector<int32_t> &instructions) noexcept {
   registers.print();
-  printf("IP: %ld ; Opcode: %s (%ld) ; Operand: %ld\n\n", ip,
+  printf("IP: %ld ; Opcode: %s (%d) ; Operand: %d\n\n", ip,
          get_opcode_name(instructions[ip]), instructions[ip],
          instructions[ip + 1]);
 }
 
-void run_instructions(Registers registers,
-                      const std::vector<int32_t> &instructions) noexcept {
+[[nodiscard]] std::vector<int64_t>
+run_instructions(Registers registers,
+                 const std::vector<int32_t> &instructions) noexcept {
   std::vector<int64_t> outputs{};
 
   int64_t output = -1;
@@ -203,6 +204,10 @@ void run_instructions(Registers registers,
   // registers.print();
   // printf("\n");
 
+  return std::move(outputs);
+}
+
+void print_outputs(const std::vector<int64_t> &outputs) noexcept {
   if (outputs.empty()) {
     printf("empty\n");
     return;
@@ -219,33 +224,33 @@ void run_instructions(Registers registers,
 void find_register_a(const std::vector<int32_t> &instructions) noexcept {
   int64_t a = 0;
   int64_t a3 = 0;
-  int64_t a_tmp = 0;
   int32_t exp_ins = 0;
   bool found = true;
 
   for (int32_t i = instructions.size() - 1;
        i >= 0 && i < instructions.size();) {
+
     if (found) {
       found = false;
-      a3 = a ? 0LL : 1LL;
-      a <<= 3LL;
+      a3 = a ? 0L : 1L;
+      a <<= 3L;
       // printf("Current %lb ; %d\n", a, instructions[i]);
     } else {
-      a >>= 3LL;
-      a3 = (a & 0b111LL) + 1LL;
-      a &= ~0b111LL;
+      a >>= 3L;
+      a3 = (a & 0b111L) + 1L;
+      a &= ~0b111L;
       ++i;
       // printf("Back %lb ; %d -> resume %03lb\n", a, instructions[i], a3);
     }
 
     exp_ins = instructions[i];
 
-    for (; a3 <= 0b111LL; ++a3) {
+    for (; a3 <= 0b111L; ++a3) {
       // My instructions simplifies to
       // [(A >> (A ^ 3)) ^ A] & 0b111
       //   `& 0b111` is the same as mod 8
       //   A always shifts by 3 bits each loop
-      if (((((a | a3) >> (a3 ^ 3LL)) ^ a3) & 0b111LL) == exp_ins) {
+      if ((a3 ^ ((a | a3) >> (a3 ^ 0b011L)) & 0b111L) == exp_ins) {
         a |= a3;
         --i;
         found = true;
@@ -264,7 +269,66 @@ void find_register_a(const std::vector<int32_t> &instructions) noexcept {
     printf(",%d", instructions[i]);
   }
   printf("] == [");
-  run_instructions({a, 0, 0}, instructions);
+  print_outputs(run_instructions({a, 0, 0}, instructions));
+  printf("]\n");
+}
+
+// Do a backward trial and error approach
+void find_register_a_generalized(
+    const std::vector<int32_t> &instructions) noexcept {
+  int64_t a = 0;
+  int64_t a3 = 0;
+  int32_t exp_ins = 0;
+  bool found = true;
+
+  // Assumes that the instructions ends with jnz instruction
+  //   and only contains one out instruction
+  std::vector<int32_t> partial_instructions = instructions;
+
+  // Remove the jnz instruction at the end
+  partial_instructions.pop_back();
+  partial_instructions.pop_back();
+
+  for (int32_t i = instructions.size() - 1;
+       i >= 0 && i < instructions.size();) {
+
+    if (found) {
+      found = false;
+      a3 = a ? 0L : 1L;
+      a <<= 3L;
+      // printf("Current %lb ; %d\n", a, instructions[i]);
+    } else {
+      a >>= 3L;
+      a3 = (a & 0b111L) + 1L;
+      a &= ~0b111L;
+      ++i;
+      // printf("Back %lb ; %d -> resume %03lb\n", a, instructions[i], a3);
+    }
+
+    exp_ins = instructions[i];
+
+    for (; a3 <= 0b111L; ++a3) {
+      if (run_instructions({a | a3, 0, 0}, partial_instructions)[0] ==
+          exp_ins) {
+        a |= a3;
+        --i;
+        found = true;
+        break;
+      }
+    }
+  }
+
+  // For verification
+
+  printf("Part 2: %ld\n", a);
+  printf("Verification: bits %lb\n", a);
+
+  printf("[%d", instructions[0]);
+  for (int32_t i = 1; i < instructions.size(); ++i) {
+    printf(",%d", instructions[i]);
+  }
+  printf("] == [");
+  print_outputs(run_instructions({a, 0, 0}, instructions));
   printf("]\n");
 }
 
@@ -272,10 +336,11 @@ int32_t main() {
   auto input = get_input();
 
   printf("Part 1: ");
-  run_instructions(input.registers, input.instructions);
+  print_outputs(run_instructions(input.registers, input.instructions));
   printf("\n");
 
-  find_register_a(input.instructions);
+  // find_register_a(input.instructions);
+  find_register_a_generalized(input.instructions);
 
   return 0;
 }
