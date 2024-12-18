@@ -123,9 +123,7 @@ struct Move {
 };
 
 struct MoveCostCompare {
-  std::size_t operator()(Move m1, Move m2) noexcept {
-    return m1.cost - m2.cost;
-  }
+  bool operator()(Move m1, Move m2) noexcept { return m1.cost > m2.cost; }
 };
 
 void print_maze(const char maze[SIZE][SIZE],
