@@ -193,8 +193,6 @@ void print_maze(const char maze[SIZE][SIZE]) noexcept {
   return -1;
 }
 
-#undef TRY_POSITION
-
 void part1(const std::vector<vec> &bytes) noexcept {
   char maze[SIZE][SIZE];
   create_maze(bytes, P1_BYTES, maze);
